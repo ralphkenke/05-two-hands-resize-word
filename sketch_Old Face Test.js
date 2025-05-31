@@ -19,11 +19,23 @@ let ellipseSize = 20; // size of the ellipses
 
 // words to display (extracted from your textonly.rtf)
 let words = [
-  "the",
-  "messenger",
-  "is",
-  "the",
-  "medium",
+  "Tracking",
+  "Non-Place",
+  "immersive",
+  "interactive",
+  "projection",
+  "installation",
+  "supermodernity",
+  "identity",
+  "instantaneity",
+  "social",
+  "emotional",
+  "technological",
+  "fragmented",
+  "existence",
+  "computational",
+  "movement-tracking",
+  "reactive image"
 ];
 
 // word state variables
@@ -31,6 +43,7 @@ let currentWordIndex = 0;
 let lastWordChangeTime = 0;
 
 let wordTraces = []; // stores traces of words
+let latestFaceLandmarks = null; // <-- Set this from your MediaPipe callback
 
 /* - - Setup - - */
 function setup() {
@@ -47,110 +60,101 @@ function setup() {
 function draw() {
   background(0);
 
-  /* WEBCAM */
+  // Draw webcam with blue tint
   push();
-  centerOurStuff(); // center the webcam
-  scale(-1, 1); // mirror webcam
-  tint(0, 0, 255); // apply blue monochrome tint
-  image(capture, -capture.scaledWidth, 0, capture.scaledWidth, capture.scaledHeight); // draw webcam
-  noTint(); // reset tint for other drawings
-  scale(-1, 1); // unset mirror
+  centerOurStuff();
+  scale(-1, 1);
+  tint(0, 0, 255);
+  image(capture, -capture.scaledWidth, 0, capture.scaledWidth, capture.scaledHeight);
+  noTint();
+  scale(-1, 1);
   pop();
+
+  // Draw face mesh dots if face detected
+  if (window.latestFaceLandmarks && window.latestFaceLandmarks.length > 0) {
+    push();
+    centerOurStuff();
+    fill(255, 0, 0);
+    noStroke();
+    let landmarks = window.latestFaceLandmarks[0];
+    for (let i = 0; i < landmarks.length; i++) {
+      // Mirror the x coordinate to match mirrored webcam
+      let x = (1 - landmarks[i].x) * capture.width;
+      let y = landmarks[i].y * capture.height;
+      ellipse(x, y, 6, 6);
+    }
+    pop();
+  }
 
   // Draw word traces (words from the last 5 seconds)
   let now = millis();
   for (let i = wordTraces.length - 1; i >= 0; i--) {
     let trace = wordTraces[i];
-    let age = now - trace.startTime;
+    let age = now - trace.time;
     if (age > 5000) {
       wordTraces.splice(i, 1); // remove old traces
       continue;
     }
-    // Animate y position from startY to endY over 'duration'
-    let t = constrain(age / trace.duration, 0, 1);
-    let y = lerp(trace.startY, trace.endY, t);
-
     push();
     centerOurStuff();
     textSize(trace.size);
     // Fade out over 5 seconds
     let alpha = map(age, 0, 5000, 255, 0);
     fill(trace.color.levels[0], trace.color.levels[1], trace.color.levels[2], alpha);
-    text(trace.word, trace.x, y);
+    text(trace.word, trace.x, trace.y);
     pop();
   }
 
-  /* TRACKING */
-  if (mediaPipe.landmarks[0] && mediaPipe.landmarks[1]) { // is at least one hand tracking ready?
-    // index finger 1
-    let index1X = map(mediaPipe.landmarks[0][8].x, 1, 0, 0, capture.scaledWidth);
-    let index1Y = map(mediaPipe.landmarks[0][8].y, 0, 1, 0, capture.scaledHeight);
+  // If face detected, use mouth openness to control speed and size
+  if (latestFaceLandmarks && latestFaceLandmarks.length > 0) {
+    // MediaPipe Face Landmarker: upper lip = 13, lower lip = 14
+    let upperLip = latestFaceLandmarks[0][13];
+    let lowerLip = latestFaceLandmarks[0][14];
 
-    // index finger 2
-    let index2X = map(mediaPipe.landmarks[1][8].x, 1, 0, 0, capture.scaledWidth);
-    let index2Y = map(mediaPipe.landmarks[1][8].y, 0, 1, 0, capture.scaledHeight);
+    // Convert normalized coords to pixels
+    let mouthOpen = dist(
+      upperLip.x * capture.width, upperLip.y * capture.height,
+      lowerLip.x * capture.width, lowerLip.y * capture.height
+    );
 
-    // center point between index1 and index2
-    let centerX = (index1X + index2X) / 2;
-    let centerY = (index1Y + index2Y) / 2;
-
-    // distance between index1 and index2
-    let distance = dist(index1X, index1Y, index2X, index2Y);
-
-    push();
-    centerOurStuff();
-
-    // draw fingers
-    fill('white');
-    ellipse(index1X, index1Y, ellipseSize, ellipseSize); // index finger
-    ellipse(index2X, index2Y, ellipseSize, ellipseSize); // index finger
-
-    // word speed calculation: closer = faster, farther = slower
-    let speed = map(distance, 50, 300, 100, 1000); // milliseconds
-    speed = constrain(speed, 100, 1000);
-
-    if (millis() - lastWordChangeTime > speed) {
-      currentWordIndex = (currentWordIndex + 1) % words.length;
-      lastWordChangeTime = millis();
-
-      // Calculate color: yellow (small) to green (large)
-      let minSize = 40;
-      let maxSize = 300;
-      let wordSize = distance * 0.9;
-      wordSize = constrain(wordSize, minSize, maxSize);
-      let yellow = color(255, 255, 0);
-      let green = color(0, 255, 0);
-      let amt = map(wordSize, minSize, maxSize, 0, 1);
-      let wordColor = lerpColor(yellow, green, amt);
-
-      // Store trace
-      wordTraces.push({
-        word: words[currentWordIndex],
-        x: centerX,
-        startY: centerY,
-        endY: capture.scaledHeight - 50, // 50px above bottom of webcam image
-        size: wordSize,
-        color: wordColor,
-        startTime: millis(),
-        duration: 2000 // ms to drop to bottom
-      });
-    }
-
-    // set text size based on distance (like the letter 'A' before)
-    let minSize = 40;
-    let maxSize = 300;
-    let wordSize = distance * 0.9;
+    // Map mouthOpen to word size and speed
+    let minMouth = 10, maxMouth = 60;
+    let minSize = 40, maxSize = 300;
+    let wordSize = map(mouthOpen, minMouth, maxMouth, minSize, maxSize);
     wordSize = constrain(wordSize, minSize, maxSize);
+
+    // Color: yellow (small) to green (large)
     let yellow = color(255, 255, 0);
     let green = color(0, 255, 0);
     let amt = map(wordSize, minSize, maxSize, 0, 1);
     let wordColor = lerpColor(yellow, green, amt);
 
-    // draw the current word
+    // Speed: wider mouth = faster
+    let minSpeed = 100, maxSpeed = 1000;
+    let speed = map(mouthOpen, minMouth, maxMouth, minSpeed, maxSpeed);
+    speed = constrain(speed, minSpeed, maxSpeed);
+
+    if (millis() - lastWordChangeTime > speed) {
+      currentWordIndex = (currentWordIndex + 1) % words.length;
+      lastWordChangeTime = millis();
+
+      // Store trace
+      wordTraces.push({
+        word: words[currentWordIndex],
+        x: 0,
+        y: 0,
+        size: wordSize,
+        color: wordColor,
+        time: millis()
+      });
+    }
+
+    // Draw current word in center
+    push();
+    translate(width / 2, height / 2);
     fill(wordColor);
     textSize(wordSize);
-    text(words[currentWordIndex], centerX, centerY);
-
+    text(words[currentWordIndex], 0, 0);
     pop();
   }
 }
