@@ -172,8 +172,7 @@ function draw() {
   textSize(80);
   fill(255, 255, 0);
   textAlign(CENTER, CENTER);
-  text("", width / 2, height / 2);// Placeholder for "play" text, if needed
-  // Uncomment the line below if you want to display "play" text
+  text("play", width / 2, height / 2);
 }
 
 /* - - Helper functions - - */
