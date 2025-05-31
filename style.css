@@ -1,7 +1,15 @@
+@font-face {
+  font-family: 'FunnelDisplay';
+  src: url('fonts/FunnelDisplay-VariableFont_wght.ttf') format('truetype');
+  font-weight: 300 900; /* Adjust range as needed */
+  font-display: swap;
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
+  background: #000;
 }
 
 main {
