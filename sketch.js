@@ -24,8 +24,9 @@ let wordTraces = [];
 let currentWordIndex = 0;
 let lastWordChangeTime = 0;
 
-// Load words from file
+// Load font and words from file
 function preload() {
+  customFont = loadFont('fonts/GT-Standard-Mono-Extended-Bold-Trial.otf');
   words = loadStrings('textonly.txt'); // one word/phrase per line
 }
 
@@ -38,13 +39,15 @@ function setup() {
   noStroke();
   textAlign(CENTER, CENTER);
   fill('yellow');
+  textFont(customFont); // Set your custom font here
 }
 
 /* - - Draw - - */
 function draw() {
   background(0);
+  textFont(customFont); // Ensure font is always set
 
-  /* WEBCAM */
+  // Draw webcam with blue tint
   push();
   centerOurStuff(); // center the webcam
   scale(-1, 1); // mirror webcam
