@@ -24,25 +24,33 @@ let wordTraces = [];
 let currentWordIndex = 0;
 let lastWordChangeTime = 0;
 
-// Load words from file
+let fingersTouching = false; // Add this at the top with your variables
+let customFont; // Add this at the top with your variables
+
+// Load words and font from file
 function preload() {
   words = loadStrings('textonly.txt'); // one word/phrase per line
+  customFont = loadFont('fonts/FunnelDisplay-VariableFont_wght.ttf');
 }
 
 /* - - Setup - - */
 function setup() {
   createCanvas(windowWidth, windowHeight);
-  captureWebcam(); // launch webcam
+  capture = createCapture(VIDEO);
+  capture.size(width, height);
+  capture.hide();
 
   // styling
   noStroke();
   textAlign(CENTER, CENTER);
   fill('yellow');
+  textFont(customFont); // Set the custom font
 }
 
 /* - - Draw - - */
 function draw() {
   background(0);
+  image(capture, 0, 0, width, height);
 
   /* WEBCAM */
   push();
@@ -70,6 +78,7 @@ function draw() {
 
     push();
     centerOurStuff();
+    textFont(customFont); // Ensure font is set before drawing text
     textSize(trace.size);
     let alpha = map(age, 0, 5000, 255, 0);
     fill(trace.color.levels[0], trace.color.levels[1], trace.color.levels[2], alpha);
@@ -78,7 +87,7 @@ function draw() {
   }
 
   /* TRACKING */
-  if (mediaPipe.landmarks && mediaPipe.landmarks[0] && mediaPipe.landmarks[1]) { // is at least one hand tracking ready?
+  if (mediaPipe.landmarks && mediaPipe.landmarks[0] && mediaPipe.landmarks[1]) {
     // index finger 1
     let index1X = map(mediaPipe.landmarks[0][8].x, 1, 0, 0, capture.scaledWidth);
     let index1Y = map(mediaPipe.landmarks[0][8].y, 0, 1, 0, capture.scaledHeight);
@@ -94,58 +103,70 @@ function draw() {
     // distance between index1 and index2
     let distance = dist(index1X, index1Y, index2X, index2Y);
 
+    // Threshold for "touching"
+    let touchThreshold = 40;
+
     push();
     centerOurStuff();
 
     // draw fingers
     fill('white');
-    ellipse(index1X, index1Y, ellipseSize, ellipseSize); // index finger
-    ellipse(index2X, index2Y, ellipseSize, ellipseSize); // index finger
+    ellipse(index1X, index1Y, ellipseSize, ellipseSize);
+    ellipse(index2X, index2Y, ellipseSize, ellipseSize);
 
-    // word speed calculation: closer = faster, farther = slower
-    let speed = map(distance, 50, 300, 100, 1000); // milliseconds
-    speed = constrain(speed, 100, 1000);
+    // Only show word when fingers are touching
+    if (distance < touchThreshold) {
+      // Only advance word if just started touching
+      if (!fingersTouching) {
+        currentWordIndex = (currentWordIndex + 1) % words.length;
+        lastWordChangeTime = millis();
 
-    if (millis() - lastWordChangeTime > speed) {
-      currentWordIndex = (currentWordIndex + 1) % words.length;
-      lastWordChangeTime = millis();
+        // --- NEW: Map centerY to size and color ---
+        let minSize = 7;
+        let maxSize = 100;
+        // Map centerY: top = maxSize, bottom = minSize
+        let wordSize = map(centerY, 0, capture.scaledHeight, maxSize, minSize);
+        wordSize = constrain(wordSize, minSize, maxSize);
 
-      let minSize = 40;
-      let maxSize = 300;
-      let wordSize = distance * 0.9;
+        // Color: top = green, bottom = yellow
+        let green = color(0, 255, 0);
+        let yellow = color(255, 255, 0);
+        let amt = map(centerY, 0, capture.scaledHeight, 0, 1); // 0=top, 1=bottom
+        let wordColor = lerpColor(green, yellow, amt);
+
+        // Store trace for dropping animation
+        wordTraces.push({
+          word: words[currentWordIndex],
+          x: centerX,
+          startY: centerY,
+          endY: capture.scaledHeight - 50,
+          size: wordSize,
+          color: wordColor,
+          startTime: millis(),
+          duration: 2000
+        });
+      }
+
+      // --- NEW: Map centerY to size and color for live word ---
+      let minSize = 7;
+      let maxSize = 100;
+      let wordSize = map(centerY, 0, capture.scaledHeight, maxSize, minSize);
       wordSize = constrain(wordSize, minSize, maxSize);
-      let yellow = color(255, 255, 0);
+
       let green = color(0, 255, 0);
-      let amt = map(wordSize, minSize, maxSize, 0, 1);
-      let wordColor = lerpColor(yellow, green, amt);
+      let yellow = color(255, 255, 0);
+      let amt = map(centerY, 0, capture.scaledHeight, 0, 1);
+      let wordColor = lerpColor(green, yellow, amt);
 
-      // Store trace for dropping animation
-      wordTraces.push({
-        word: words[currentWordIndex],
-        x: centerX,
-        startY: centerY,
-        endY: capture.scaledHeight - 50, // 50px above bottom of webcam image
-        size: wordSize,
-        color: wordColor,
-        startTime: millis(),
-        duration: 2000 // ms to drop to bottom
-      });
+      fill(wordColor);
+      textFont(customFont); // Ensure font is set before drawing text
+      textSize(wordSize);
+      text(words[currentWordIndex], centerX, centerY);
+
+      fingersTouching = true;
+    } else {
+      fingersTouching = false;
     }
-
-    // set text size based on distance (like the letter 'A' before)
-    let minSize = 40;
-    let maxSize = 300;
-    let wordSize = distance * 0.9;
-    wordSize = constrain(wordSize, minSize, maxSize);
-    let yellow = color(255, 255, 0);
-    let green = color(0, 255, 0);
-    let amt = map(wordSize, minSize, maxSize, 0, 1);
-    let wordColor = lerpColor(yellow, green, amt);
-
-    // draw the current word
-    fill(wordColor);
-    textSize(wordSize);
-    text(words[currentWordIndex], centerX, centerY);
 
     pop();
   }
